@@ -1,0 +1,273 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Wire.h>
+#include <U8g2lib.h>
+
+// ================= WIFI AP =================
+const char* ssid = "TankBot";
+const char* password = "12345678";
+
+WebServer server(80);
+
+// ================= OLED (U8g2) =================
+#define SDA_PIN 5
+#define SCL_PIN 4
+
+U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
+
+// ================= SERVOS =================
+#define SERVO_LEFT   3
+#define SERVO_RIGHT  2
+
+#define PWM_FREQ 50
+#define PWM_RES  12
+
+#define LEFT_NEUTRAL   1500
+#define RIGHT_NEUTRAL  1500
+#define MAX_OFFSET     200
+
+// ================= CONTROL =================
+int currentThrottle = 0;
+int currentTurn = 0;
+
+// ================= EYE CONFIG =================
+#define SCREEN_W 128
+#define SCREEN_H 64
+
+int eyeW = 34;
+int eyeH = 26;
+int gap = 14;
+int baseY = 18;
+
+int leftX, rightX;
+
+// ================= MOVEMENT =================
+float offsetX = 0;
+float offsetY = 0;
+float targetX = 0;
+float targetY = 0;
+
+// ================= TIMING =================
+unsigned long lastMove = 0;
+unsigned long lastBlink = 0;
+unsigned long lastMood = 0;
+
+unsigned long moveInterval = 2000;
+unsigned long moodInterval = 8000;
+
+// ================= MOODS =================
+enum Mood {
+  HAPPY,
+  ANGRY,
+  SAD,
+  BORED
+};
+
+Mood currentMood = HAPPY;
+
+// ================= UTIL =================
+float clamp(float v, float minV, float maxV) {
+  if (v < minV) return minV;
+  if (v > maxV) return maxV;
+  return v;
+}
+
+// ================= PWM =================
+uint32_t usToDuty(int us) {
+  float period = 1000000.0 / PWM_FREQ;
+  return (us / period) * ((1 << PWM_RES) - 1);
+}
+
+void writeServos(int left_us, int right_us) {
+  ledcWrite(SERVO_LEFT,  usToDuty(left_us));
+  ledcWrite(SERVO_RIGHT, usToDuty(right_us));
+}
+
+// ================= DRIVE =================
+void drive(int throttle, int turn) {
+  currentThrottle = throttle;
+  currentTurn = turn;
+
+  int left  = throttle + turn;
+  int right = throttle - turn;
+
+  left  = constrain(left,  -100, 100);
+  right = constrain(right, -100, 100);
+
+  int left_us  = LEFT_NEUTRAL  + map(left,  -100, 100, -MAX_OFFSET, MAX_OFFSET);
+  int right_us = RIGHT_NEUTRAL + map(right, -100, 100,  MAX_OFFSET, -MAX_OFFSET);
+
+  writeServos(left_us, right_us);
+}
+
+// ================= EYE DRAW =================
+void drawEye(int x, int y, int w, int h, int r) {
+  r = constrain(r, 1, min(w, h)/2);
+  u8g2.drawRBox(x, y, w, h, r);
+}
+
+void drawFace(int h) {
+  int yOffset = offsetY;
+
+  switch (currentMood) {
+
+    case HAPPY:
+      drawEye(leftX + offsetX, baseY + 6 + yOffset, eyeW, h/2, 10);
+      drawEye(rightX + offsetX, baseY + 6 + yOffset, eyeW, h/2, 10);
+      break;
+
+    case ANGRY:
+      drawEye(leftX + offsetX, baseY + yOffset + 2, eyeW, h, 10);
+      drawEye(rightX + offsetX, baseY + yOffset - 2, eyeW, h, 10);
+      break;
+
+    case SAD:
+      drawEye(leftX + offsetX, baseY + yOffset + 4, eyeW, h/2, 10);
+      drawEye(rightX + offsetX, baseY + yOffset + 4, eyeW, h/2, 10);
+      break;
+
+    case BORED:
+      drawEye(leftX + offsetX, baseY + yOffset + eyeH/2, eyeW, 6, 10);
+      drawEye(rightX + offsetX, baseY + yOffset + eyeH/2, eyeW, 6, 10);
+      break;
+  }
+}
+
+// ================= BLINK =================
+void blink() {
+  for (int h = eyeH; h > 4; h -= 4) {
+    u8g2.clearBuffer();
+    drawEye(leftX + offsetX, baseY + offsetY, eyeW, h, 10);
+    drawEye(rightX + offsetX, baseY + offsetY, eyeW, h, 10);
+    u8g2.sendBuffer();
+    delay(8);
+  }
+
+  delay(50);
+
+  for (int h = 4; h <= eyeH; h += 4) {
+    u8g2.clearBuffer();
+    drawEye(leftX + offsetX, baseY + offsetY, eyeW, h, 10);
+    drawEye(rightX + offsetX, baseY + offsetY, eyeW, h, 10);
+    u8g2.sendBuffer();
+    delay(8);
+  }
+}
+
+// ================= MOVEMENT =================
+void updateMovement() {
+  offsetX += (targetX - offsetX) * 0.15;
+  offsetY += (targetY - offsetY) * 0.15;
+
+  offsetX = clamp(offsetX, -10, 10);
+  offsetY = clamp(offsetY, -6, 6);
+}
+
+void randomLook() {
+  targetX = random(-10, 10);
+  targetY = random(-6, 6);
+}
+
+Mood getRandomMood() {
+  int r = random(0, 10);
+  if (r < 3) return HAPPY;
+  if (r < 5) return SAD;
+  if (r < 7) return BORED;
+  return ANGRY;
+}
+
+// ================= WEB =================
+void handleRoot() {
+  String html = R"rawliteral(
+  <html><body style="text-align:center;">
+  <h2>Tank Control</h2>
+  <button onclick="send(100,0)">Forward</button><br><br>
+  <button onclick="send(-100,0)">Backward</button><br><br>
+  <button onclick="send(0,-100)">Left</button>
+  <button onclick="send(0,100)">Right</button><br><br>
+  <button onclick="send(0,0)">Stop</button>
+
+  <script>
+  function send(t,r){
+    fetch(`/control?t=${t}&r=${r}`);
+  }
+  </script>
+  </body></html>
+  )rawliteral";
+
+  server.send(200, "text/html", html);
+}
+
+void handleControl() {
+  if (server.hasArg("t") && server.hasArg("r")) {
+    drive(server.arg("t").toInt(), server.arg("r").toInt());
+  }
+  server.send(200, "text/plain", "OK");
+}
+
+// ================= SETUP =================
+void setup() {
+  Serial.begin(115200);
+
+  Wire.begin(SDA_PIN, SCL_PIN);
+  u8g2.begin();
+
+  ledcAttach(SERVO_LEFT,  PWM_FREQ, PWM_RES);
+  ledcAttach(SERVO_RIGHT, PWM_FREQ, PWM_RES);
+  writeServos(LEFT_NEUTRAL, RIGHT_NEUTRAL);
+
+  WiFi.softAP(ssid, password);
+  Serial.println(WiFi.softAPIP());
+
+  server.on("/", handleRoot);
+  server.on("/control", handleControl);
+  server.begin();
+
+  randomSeed(analogRead(0));
+
+  leftX = (SCREEN_W / 2) - eyeW - (gap / 2);
+  rightX = (SCREEN_W / 2) + (gap / 2);
+}
+
+// ================= LOOP =================
+void loop() {
+
+  updateMovement();
+
+  u8g2.clearBuffer();
+  drawFace(eyeH);
+  u8g2.sendBuffer();
+
+  // movement
+  if (millis() - lastMove > moveInterval) {
+    if (abs(currentThrottle) > 20) {
+      targetY = map(currentThrottle, -100, 100, 6, -6);
+      targetX = 0;
+    } else if (abs(currentTurn) > 20) {
+      targetX = map(currentTurn, -100, 100, -10, 10);
+      targetY = 0;
+    } else {
+      randomLook();
+    }
+
+    lastMove = millis();
+    moveInterval = 2000 + random(2000);
+  }
+
+  // mood
+  if (millis() - lastMood > moodInterval) {
+    currentMood = getRandomMood();
+    lastMood = millis();
+    moodInterval = 7000 + random(5000);
+  }
+
+  // blink
+  if (millis() - lastBlink > 3000 + random(3000)) {
+    blink();
+    lastBlink = millis();
+  }
+
+  server.handleClient();
+
+  delay(30);
+}
