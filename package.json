@@ -1,0 +1,28 @@
+{
+  "name": "debt-tracker",
+  "version": "1.0.0",
+  "description": "A beautiful, dark-themed debt tracking application with mobile-first design",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "build": "echo 'No build process required'",
+    "lint": "echo 'Linting not implemented'"
+  },
+  "keywords": [
+    "debt-tracker",
+    "personal-finance",
+    "pwa",
+    "mobile-first",
+    "dark-theme"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "browserslist": [
+    "last 2 Chrome versions",
+    "last 2 Firefox versions",
+    "last 2 Safari versions",
+    "last 2 Edge versions"
+  ],
+  "devDependencies": {},
+  "dependencies": {}
+}

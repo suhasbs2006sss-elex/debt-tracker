@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DebtTracker - Notion Reminder</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0a0a0a">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-coins"></i>
+                <h1>DebtTracker</h1>
+            </div>
+            <button id="addDebtBtn" class="add-btn">
+                <i class="fas fa-plus"></i>
+            </button>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-container">
+            <div class="stat-card total-owed">
+                <div class="stat-info">
+                    <h3>Total Owed to You</h3>
+                    <p class="amount" id="totalOwed">$0.00</p>
+                </div>
+                <i class="fas fa-arrow-up"></i>
+            </div>
+            <div class="stat-card total-owe">
+                <div class="stat-info">
+                    <h3>Total You Owe</h3>
+                    <p class="amount" id="totalOwe">$0.00</p>
+                </div>
+                <i class="fas fa-arrow-down"></i>
+            </div>
+            <div class="stat-card net-balance">
+                <div class="stat-info">
+                    <h3>Net Balance</h3>
+                    <p class="amount" id="netBalance">$0.00</p>
+                </div>
+                <i class="fas fa-balance-scale"></i>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="owed-to-me">Owed to Me</button>
+            <button class="tab-btn" data-tab="i-owe">I Owe</button>
+        </div>
+
+        <!-- Debt List -->
+        <div class="debt-list" id="debtList">
+            <!-- Debts will be dynamically added here -->
+        </div>
+
+        <!-- Add/Edit Modal -->
+        <div id="debtModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle">Add Debt</h2>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="debtForm">
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" placeholder="Who?" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="amount">Amount ($)</label>
+                        <input type="number" id="amount" step="0.01" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="type">Type</label>
+                        <select id="type">
+                            <option value="owed-to-me">Owed to Me</option>
+                            <option value="i-owe">I Owe</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="dueDate">Due Date</label>
+                        <input type="date" id="dueDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" placeholder="Any additional details..."></textarea>
+                    </div>
+                    <button type="submit" class="save-btn">Save</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast">
+            <span id="toastMessage">Notification</span>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
